@@ -1,0 +1,406 @@
+<html>
+	<head>
+		<title> MAKEUP PARTY!!</title>
+
+		<!-- Styling for the document  -->
+		<style type="text/css">
+			body {
+				width: 90%;
+				margin: 0 auto;}
+			#content {overflow: auto;}
+			#canvasColumn{
+				width: 65%;
+				float: left;
+				margin: 1%;}
+			#feedColumn{
+				width: 35%;
+				float: right;
+				margin: 1%;
+			}
+			#feedColumn video{
+				width:220px; 
+				height: 140px;
+			}
+		</style>
+
+		<!-- PeerJS library and socket.io library -->
+		<script src="http://cdn.peerjs.com/0.3/peer.min.js"></script>
+		<script src="/socket.io/socket.io.js"></script>
+
+		<script type="text/javascript">
+
+		// global variables - these will be used globally in the script
+
+		// this will eventurally hold 'this' computer's video stream from the webcam so that it 
+		// can be passed to other clients or to a server
+ 		var my_stream = null;
+
+		// empty variables for the peer object and the peer identifier string
+		var peer = null;
+		var peer_id = null;
+
+		// empty variable for the socket object
+		var socket = null;
+
+		// empty variables for the video canvas and its context (HTML5 canvas)
+		var videoCanvas = null;
+		var videoContext = null;
+
+		// empty varibles used to toggle countdown functionality for the make over
+		var drawingCountdown = null;
+		var countdownOn = null;
+
+		//canvas drawing variables
+		var prevX = 0;
+		var prevY = 0;
+		var currX = 0;
+		var currY = 0;
+		var flag = false;
+		var dot_flag = false;
+
+		var lipTool = "lip";
+		var eyeTool = "eye";
+
+		var x = 'hotpink';
+		var y = 20;
+
+		var blush = false;
+
+		// 1. This function is initialized with the document completely loads. 
+		// 2. Gets user media (webCam video) and places it into a variable that can be passed around to other clients 
+		//    or servers. After getting user media, init connects to the PeerJS server.
+		// 3. This is also where the video canvas and context are defined as well as drawing methods and event listeners.
+		var init = function(){
+
+			window.URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
+			navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+			if(navigator.getUserMedia){
+				navigator.getUserMedia({video: true, audio: false}, function(stream){
+					my_stream = stream;
+					var videoElement = document.getElementById('myVideo');
+					videoElement.src = window.URL.createObjectURL(stream) || stream;
+					videoElement.play();
+				
+					//connect to peer server
+					peerConnect();
+
+				}, function(err){
+					console.log('Failed to get local stream', err);
+				});
+			}
+
+			if(navigator.getUserMedia){
+				navigator.getUserMedia({video: false, audio: true}, function(stream){
+					my_audio = stream;
+					var audioElement = document.getElementById('my 	');
+					videoElement.src = window.URL.createObjectURL(stream) || stream;
+					videoElement.play();
+				
+					//connect to peer server
+					peerConnect();
+
+				}, function(err){
+					console.log('Failed to get local stream', err);
+				});
+			}
+
+			videoCanvas = document.getElementById('videoCanvas');
+			videoContext = videoCanvas.getContext('2d');
+
+			var w = videoCanvas.width;
+		    var h = videoCanvas.height;
+
+		    dot_flag = false;
+
+		    videoCanvas.addEventListener("mousemove", function (e) {
+		        findxy('move', e)
+		    }, false);
+		    videoCanvas.addEventListener("mousedown", function (e) {
+		        findxy('down', e)
+		    }, false);
+		    videoCanvas.addEventListener("mouseup", function (e) {
+		        findxy('up', e)
+		    }, false);
+		    videoCanvas.addEventListener("mouseout", function (e) {
+		        findxy('out', e)
+		    }, false);
+		}
+
+		function color(obj) {
+		    switch (obj.id) {
+		        case "#FF69B4":
+		            x = "rgba(255, 105, 80, 0.05)";
+		            blush = true;
+		            lipstick = false;
+		            eyeshadow = false;
+		            break;
+		        case "#DC143C":
+		            x = "rgba(220, 20, 60, 0.25)";
+		            blush = false;
+		            lipstick = true;
+		            eyeshadow = false;
+		            break;
+		        case "#483D8B":
+		            x = "rgba(72, 61, 139, 0.05)";
+		            blush = false;
+		            lipstick = false;
+		            eyeshadow = true;
+		            break;
+		        }
+		}
+
+		function draw() {
+		    videoContext.beginPath();
+		    videoContext.moveTo(prevX, prevY);
+		    // videoContext.globalAlpha = 0.25;
+		    videoContext.lineTo(currX, currY);
+		    videoContext.strokeStyle = x;
+
+		    if(blush){
+		    	videoContext.lineWidth = 20;
+		    }
+		    else if(lipstick){
+		    	videoContext.lineWidth = 20;		    }
+		    else{
+		    	videoContext.lineWidth = 10;
+		    }
+
+		    videoContext.lineJoin = videoContext.lineCap = 'round';  
+		    videoContext.shadowBlur = 20; 
+		    videoContext.shadowColor =x; 
+		    videoContext.stroke();
+		    videoContext.closePath();
+		}
+
+		var findxy = function (mou, e) {
+		    if (mou == 'down') {
+		        prevX = currX;
+		        prevY = currY;
+		        currX = e.clientX - videoCanvas.offsetLeft;
+		        currY = e.clientY - videoCanvas.offsetTop;
+		        flag = true;
+		        dot_flag = true;
+
+			        if (dot_flag) {
+			    	console.log("videoContext" + videoContext);
+			        videoContext.beginPath();
+			        videoContext.fillStyle = x;
+			        videoContext.fill();
+			        videoContext.closePath();
+			        videoContext.shadowBlur = 40; 
+			        dot_flag = false;
+			    }
+		    }
+
+		    
+
+		    if (mou == 'up' || mou == "out") {
+		        flag = false;
+		    }
+
+		    if (mou == 'move') {
+		        if (flag) {
+		            prevX = currX;
+		            prevY = currY;
+		            currX = e.clientX - videoCanvas.offsetLeft;
+		            currY = e.clientY - videoCanvas.offsetTop;
+		            draw();
+		        }
+		    }
+		}
+	
+
+		// 1. this function connects us to the PeerJS server using a unique API key
+		// 2. it then grabs a Peer ID from the server that can be used to make and receive calls
+		// 3. after it grabs a Peer ID, it emits that ID to a socket server, so that the ID can be broadcast to others
+		// 4. there is also a peer.on('call'...) event that answers a call with 'this' stream and grabs the outside stream
+		//    and appends it to the HTML document
+		var peerConnect = function(){
+
+			// create a new PeerJS object
+			peer = new Peer({key: 'bw8m5kivpn5klnmi'});
+
+			// Get an ID from the PeerJS server
+			peer.on('open', function(id){
+				console.log('My peer ID is: ' + id);
+				peer_id = id;
+
+				//connect to socket server (see function below)
+				connectSocket();
+			});
+
+			// on receiving a call ... 
+			peer.on('call', function(incoming_call) {
+				console.log("You got a new call");
+
+				// answer the call with an AV stream
+				incoming_call.answer(my_stream);
+
+				// when you receive a stream from an incoming call, place it in a video div
+				incoming_call.on('stream', function(remoteStream){
+					console.log("Incoming stream ...")
+					var ovideoElement = document.createElement('video');
+					ovideoElement.src = window.URL.createObjectURL(remoteStream) || remoteStream;
+					ovideoElement.play();
+					document.getElementById("feedColumn").appendChild(ovideoElement);					
+				});
+			});
+		};
+
+		// 1. connects to the node server and emits 'this' peer_id
+		// 2. when the server emits the peer_id of another client, 'this' client calls that client and 
+		//    gets its stream
+		// 3. socket events follow, see description above each event
+		var connectSocket = function(){
+
+			// '/' connects to the same server that the page was served from
+			socket = io.connect('/');
+
+			// Connection event
+			socket.on('connect', function(){
+				console.log("sending out my peer id");
+				socket.emit("peer_id", peer_id);
+			});
+
+			// Receive other peer ids
+			socket.on('peer_id_server', function (data){
+				console.log("Got a new peer from server: " + data);
+
+				// call them with our stream
+				console.log("Calling peer: " + data);
+				var call = peer.call(data, my_stream);
+
+				// when we get a remote stream, append it to our document
+				call.on('stream', function(remoteStream){
+					console.log("Got remote stream!");
+					var ovideoElement = document.createElement('video');
+					ovideoElement.src = window.URL.createObjectURL(remoteStream) || remoteStream;
+					ovideoElement.id = data;
+					ovideoElement.play();
+					document.getElementById("feedColumn").appendChild(ovideoElement);
+				});
+			});
+
+			// countDown event from the socket.io server
+			socket.on('countdownEvent01', function(count){
+				console.log(count);
+
+				// draw the count to the canvas
+				var c=document.getElementById("videoCanvas");
+				var ctx=c.getContext("2d");
+
+				ctx.clearRect(0, 0, c.width, c.height);
+				ctx.font="20px Georgia";
+				ctx.fillText(count,10,50);
+
+			});
+
+			// event to grab images from the canvas
+			socket.on('grabImages', function(){
+
+				var dataUrl = videoCanvas.toDataURL('image/webp', 1);
+				socket.emit('grabbedImage', dataUrl);
+
+			});
+
+			//remove video of the user who left
+			socket.on('peer_disconnect', function(data){
+				console.log("removing video with ID" + data);
+				var theVideo =document.getElementById(data);
+				theVideo.parentNode.removeChild(theVideo);
+			});
+
+			// the server selects a random user and transmits their photo to the all canvases 
+			socket.on('randomSelection', function(random_id){
+				console.log("got id: " + random_id);
+				if (random_id == peer_id){
+					console.log("IT'S ME!");
+
+					var video = document.getElementById('myVideo');
+
+					videoContext.drawImage(video,0,0,videoCanvas.width,videoCanvas.height);
+
+					var makeOverPhoto = videoCanvas.toDataURL('image/webp', 1);
+					socket.emit('randomPhoto', makeOverPhoto);
+				
+					console.log("sent portrait");
+
+					countdownOn = true;
+					drawingCountdown = 60;
+
+					countdown();
+				};
+			});
+
+			// if the server sends a makeOver image then draw it to the canvas
+			socket.on('makeOverTime', function(imageFromServer){
+
+				// var image = imageFromServer;
+
+				console.log("received image from server");
+
+				document.getElementById('imagefile').src = imageFromServer;
+				videoContext.drawImage(document.getElementById('imagefile'),0,0,videoCanvas.width,videoCanvas.height);
+
+			});
+
+			socket.on('slideshow', function(imageFromServer){
+
+				console.log("received slideshow image!");
+
+				document.getElementById('imagefile').src = imageFromServer;
+				videoContext.drawImage(document.getElementById('imagefile'),0,0,videoCanvas.width,videoCanvas.height);
+
+			})
+
+			// 20 second countdown for makeUp to be drawn, when 20 seconds is up, send a signal to the server to grab all canvas images from clients
+			var countdown = function(){
+
+				if (countdownOn){
+					drawingCountdown --;
+					console.log("Drawing Countdown : " + drawingCountdown);
+
+					if(drawingCountdown == 0){
+						countdownOn = false;
+						count = 60;
+						socket.emit('drawingCountdown','');
+					}
+
+					setTimeout(countdown, 1000);
+				}
+			}
+		};
+
+		window.addEventListener('load', init);
+
+		</script>
+
+	</head>
+	<body>
+
+		<div id="header">
+			<h1> MakeUp Party!!! </h1>
+		</div>
+		<div id="content">
+			<div style="position:absolute;top:10%;left:3%; z-index:2;">Makeup Box</div>
+		    <div style="position:absolute;top:13%;left:3%;width:80px;height:40px;background:#FF69B4; z-index:2;" id="#FF69B4" onclick="color(this)">Blush</div>
+		    <div style="position:absolute;top:17%;left:3%;width:80px;height:40px;background:#DC143C; z-index:2;" id="#DC143C" onclick="color(this)">Lipstick</div>
+		    <div style="position:absolute;top:21%;left:3%;width:80px;height:40px;background:#483D8B; z-index:2;" id="#483D8B" onclick="color(this)">Eyeshadow</div>
+			<div id="canvasColumn">
+			<canvas id="videoCanvas" style="z-index:1; position:absolute; left:0px; top0px;" width="600" height="400">Error.</canvas>
+
+<!-- 			<canvas id="drawCanvas" style="z-index:2; position:absolute; left:0px; top0px;" width="400" height="300">Error.</canvas> -->
+			</div>
+
+			<div id="feedColumn">
+			Feed Column
+			<br>
+			<video id="myVideo"></video>
+			</div>
+		</div>
+
+		<!-- blank image file from the server -->
+		<img id="imagefile" style="display:none;">
+	</body>
+</html>
